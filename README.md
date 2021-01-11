@@ -1,5 +1,7 @@
 # haskellChallenges
 
+Coursework Instructions:
+
 <object data="CourseworkInstructions.pdf" type="application/pdf" width="700px" height="700px">
     <embed src="CourseworkInstructions.pdf">
         <p>This browser does not support PDFs. Please download the PDF to view it: <a href="CourseworkInstructions.pdf">Download PDF</a>.</p>
