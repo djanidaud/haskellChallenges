@@ -1,6 +1,6 @@
 -- comp2209 Functional Programming Challenges Tests
 -- (c) University of Southampton 2020
--- Dzhani S Daud, dsd1u19@soton.ac.uk 
+-- Author: Dzhani S Daud, dsd1u19@soton.ac.uk 
 
 import qualified Control.Exception as E
 import Data.List
@@ -12,17 +12,21 @@ import Data.Either
 main :: IO ()
 main = testChallengeI >> testChallengeII >> testChallengeIII >>  testChallengeIV >> testChallengeV >> testChallengeVI 
 
+
 assertNull:: (Eq a, Show a) => String -> [a] -> Assertion
 assertNull m a = assertEqual m [] a
 
+
 assertEqualLists:: (Eq a, Show a) => String -> [a] -> [a] -> Assertion
 assertEqualLists m a b = assertNull m (a \\ b)
+
 
 createAndSolve :: [ String ] -> Double -> IO [ (String, Maybe Placement) ]
 createAndSolve words maxDensity =   do g <- createWordSearch words maxDensity
                                        let soln = solveWordSearch words g
                                        printGrid g
                                        return soln
+
 
 printGrid :: WordSearchGrid -> IO ()
 printGrid [] = return ()
@@ -31,8 +35,15 @@ printGrid (w:ws) = do putStrLn w
                       return ()
 
 
-
-
+-- Tests the following cases:
+--    base case functionality 
+--    lowercase words test
+--    duplicated words test
+--    empty words test, ie [] test
+--    empty grid test
+--    words that contain the empty string test
+--    unsquare grid test
+--    palindromes test
 testChallengeI :: IO ()
 testChallengeI = do  putStrLn "-------- Testing Challenge I --------" 
                      
@@ -72,10 +83,17 @@ testChallengeI = do  putStrLn "-------- Testing Challenge I --------"
                      assertError m f = do wasErrorThrown <- isLeft <$> (E.try $ E.evaluate f :: IO (Either E.SomeException ( [(String, Maybe Placement)])))
                                           assertBool m wasErrorThrown
                                                             
-                                                                                    
-                                           
-                  
-             
+                        
+-- Tests the following cases:
+--    test with a density of 1, 0.75, 0.5
+--    duplicated words test
+--    lowercase words test
+--    empty words test, ie [] test
+--    zero density test
+--    negative density test
+--    desnity > 1 test
+--    palindromes test      
+--    words that contain the empty string test       
 testChallengeII :: IO ()
 testChallengeII = do  putStrLn "-------- Testing Challenge II --------"
                       
@@ -126,6 +144,13 @@ testChallengeII = do  putStrLn "-------- Testing Challenge II --------"
                                                  allWordsArePresent = length [ w | w <- words, (w1,plc) <- test, w==w1, isJust plc] == length words
                       
 
+-- Tests the following cases:
+--    correct bracketing
+--    replacement of sub-exprs which are equal to an already defined macro
+--    macros with equal definitions test
+--    composed macros
+--    negative lamvars
+--    invalid macro name
 testChallengeIII :: IO ()
 testChallengeIII = do  putStrLn "-------- Testing Challenge III --------"
                        
@@ -180,7 +205,11 @@ testChallengeIII = do  putStrLn "-------- Testing Challenge III --------"
                                             assertBool m wasErrorThrown
                        
               
-
+-- Tests the following cases:
+--    base case functionality
+--    gramatically incorrect input
+--    repeated macro def
+--    unclosed macro definitions
 testChallengeIV :: IO ()
 testChallengeIV = do  putStrLn "-------- Testing Challenge IV --------" 
                      
@@ -227,7 +256,10 @@ testChallengeIV = do  putStrLn "-------- Testing Challenge IV --------"
 
                       putStrLn "-------- End of test --------"
 
-
+-- Tests the following cases:
+--    base case functionality
+--    negative lamvars
+--    invalid macro name
 testChallengeV :: IO ()
 testChallengeV = do  putStrLn "-------- Testing Challenge V --------"
                      
@@ -286,7 +318,14 @@ testChallengeV = do  putStrLn "-------- Testing Challenge V --------"
                                           assertBool m wasErrorThrown
                      
 
-  
+-- Tests the following cases:
+--    base case functionality
+--    not enought steps
+--    negative number of steps
+--    unclosed macro definitions
+--    negative lamvars
+--    invalid macro name  
+--    tests on the innerRedn1 and outerRedn1 for negative lamvars, invalid macro names and unclosed macro definitions
 testChallengeVI :: IO ()
 testChallengeVI = do  putStrLn "-------- Testing Challenge VI --------"
 
@@ -355,25 +394,15 @@ testChallengeVI = do  putStrLn "-------- Testing Challenge VI --------"
                                            assertBool m wasErrorThrown
                        
 
-
+negativeLamVar,invalidMacroName :: LamMacroExpr
 negativeLamVar = LamDef [] (LamApp (LamAbs 1 (LamVar (-1))) exId)
 invalidMacroName = LamDef [("X-=.", LamVar 1)] (LamVar 1)
 
-wExp :: LamExpr
-wExp = (LamAbs 1 (LamApp (LamVar 1) (LamVar 1)))
-
-ex1, ex2,ex3, ex4, ex5, ex6,ex7:: LamMacroExpr
-ex1 = LamDef [] (LamAbs 1 (LamApp (LamVar 1) (LamVar 2)))
-ex2 = LamDef [ ("F",exId) ] (LamMacro "F")   
-ex3 = LamDef [] ( LamApp exId (LamAbs 2 (LamVar 2)))
-ex4 = LamDef [] (LamApp wExp wExp)
-ex5 = LamDef [ ("ID",exId) , ("FST",LamAbs 1 (LamAbs 2 (LamVar 1))) ] ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp (LamMacro "ID") (LamVar 4)))
-ex6 = LamDef [ ("FST", LamAbs 1 (LamAbs 2 (LamVar 1)) ) ]  ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp (exId) (LamVar 4)))
-ex7 = LamDef [ ("ID",exId) , ("SND",LamAbs 1 (LamAbs 2 (LamVar 2))) ]  (LamApp (LamApp (LamMacro "SND") (LamApp wExp wExp) ) (LamMacro "ID") ) 
 
 exId, var1 :: LamExpr
 exId =  LamAbs 1 (LamVar 1)
 var1 = LamVar 1
+
 
 lamExp1, lamExp2, lamExp3, lamExp4, lamExp5, lamExp6, lamExp7, lamExp8, lamExp9, lamExp10, lamExp11, lamExp12, lamExp13, lamExp14, lamExp15, lamExp16, lamExp17, lamExp18, lamExp19, lamExp20  :: LamMacroExpr
 lamExp1 = LamDef [] (LamApp exId exId)

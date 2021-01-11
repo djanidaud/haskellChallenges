@@ -1,7 +1,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 -- comp2209 Functional Programming Challenges
 -- (c) University of Southampton 2020
--- Dzhani S Daud, dsd1u19@soton.ac.uk
+-- Author: Dzhani S Daud, dsd1u19@soton.ac.uk
 -- Skeleton code to be updated with your solutions
 -- The dummy functions here simply return an arbitrary value that is usually wrong 
 
@@ -590,7 +590,6 @@ abstractionExpr :: Parser LamExpr
 abstractionExpr = do symbol "\\"
                      var <- token varExpr
                      let (LamVar varId) = var
-
                      symbol "->"
                      exp <- token expr
                      return $ LamAbs varId exp
