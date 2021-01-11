@@ -584,31 +584,28 @@ hasUnclosedMacroDef :: LamMacroExpr -> Bool
 hasUnclosedMacroDef (LamDef table _) = any (not.isTermClosed.snd) table
 
 varExpr :: Parser LamExpr
-varExpr = char 'x' >> LamVar <$> nat
+varExpr = symbol "x" >> LamVar <$> nat
           
 abstractionExpr :: Parser LamExpr
-abstractionExpr = do char '\\'
+abstractionExpr = do symbol "\\"
                      var <- token varExpr
                      let (LamVar varId) = var
 
-                     string "->"
-
+                     symbol "->"
                      exp <- token expr
-
-                     return (LamAbs varId exp)
+                     return $ LamAbs varId exp
 
 
 bracketedExpr :: Parser LamExpr
-bracketedExpr = do char '('
+bracketedExpr = do symbol "("
                    expr <- token expr
-                   char ')'
+                   symbol ")"
                    return expr
 
 
 applicationExpr :: Parser LamExpr
-applicationExpr = do atoms <- some $ token atomExpr
-                     let ex = foldl (\at acc -> (LamApp at acc) ) (head atoms) (tail atoms)
-                     return ex
+applicationExpr = foldl1 LamApp <$> (some $ token atomExpr)
+                     
 
 
 atomExpr :: Parser LamExpr
@@ -624,17 +621,16 @@ expr = applicationExpr <|> abstractionExpr
 
 
 macroExpr :: Parser LamMacroExpr
-macroExpr = do  arr <- many (do  token $ string "def"
-                                 
+macroExpr = do  arr <- many (do  symbol "def"
+
                                  macro <- macroNameExpr
                                  let (LamMacro mName) = macro
                                  
-                                 token $ char '='
-                                 
+                                 symbol "="
+
                                  exp <- expr
                                  
-                                 token $ string "in"
-                                 
+                                 symbol "in"
                                  return (mName, exp))
                 exp <- expr
                 return $ LamDef arr exp
