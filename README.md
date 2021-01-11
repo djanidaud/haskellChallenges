@@ -1,4 +1,4 @@
-# Haskell Challenges:
+# Haskell Challenges
 
 - Word Search Grid solver
 - Randomised Word Search Grid generator
@@ -8,7 +8,7 @@
 - Macro Lambda Calculus Evaluator using innermost and outermost strategies
 
 
-# Coursework Instructions:
+# Coursework Instructions
 
 <object data="CourseworkInstructions.pdf" type="application/pdf" width="700px" height="700px">
     <embed src="CourseworkInstructions.pdf">
