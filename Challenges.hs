@@ -187,7 +187,7 @@ go DownBack    =  go Down . go Back
 -- Once we have created a crossword (which is only filled with words), we try to fill its Nothing values with random chars
 -- If we fail, we try again with a different crossword of the same size (we do not increase the size because of assumption 2)
 createWordSearch :: [String] -> Double -> IO WordSearchGrid
-createWordSearch [] _ = error "Error: the words input cannot be [] because such input produces the [] grid and the instructions specify that each grid must be non-empty!"
+createWordSearch [] _ = error "Error: the words input cannot be [] because such input produces the [] grid and such grids have undefined density!"
 createWordSearch words density | density <= 0 || 1 < density = error "Error: the grid density must be bigger than 0 and less than 1!"
                                | hasPalindromes words = error "Error: the input words cannot contain palinromes!"
                                | otherwise = toWordSearchGrid $ createWordSearch' initialSize
