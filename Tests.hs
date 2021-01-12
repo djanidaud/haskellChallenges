@@ -57,7 +57,7 @@ testChallengeI = do  putStrLn "-------- Testing Challenge I --------"
                             [("WORD", Nothing)] (solveWordSearch ["WORD", "WORD"] ["XX","XX"])
 
                      let test7 = TestCase $ assertNull "The algorithm should be able to handle the [] words as input!" (solveWordSearch [] ["XXX","XXX","XXX"])
-                     let test8 = TestCase $ assertError "The algorithm should throw an error for the empty [] grid" (solveWordSearch ["SOMEWORD"] [])
+                     let test8 = TestCase $ assertEqual "The algorithm should be able to handle the [] grid" ([("SOMEWORD", Nothing)]) (solveWordSearch ["SOMEWORD"] [])
                      let test9 = TestCase $ assertError "The algorithm should throw an error for the \"\" word!" (solveWordSearch ["ME", "" , "JOB"] ["GJV", "DWA", "TSW"])
                      let test10 = TestCase $ assertError "The algorithm should throw an error for unsquare grids!" (solveWordSearch ["SOMEWORD"] ["KDK","DWLN","KWLN"]) 
                      
@@ -105,7 +105,7 @@ testChallengeII = do  putStrLn "-------- Testing Challenge II --------"
 
                       let test5 = TestCase $ assertSolution  "The algorithm should be able to handle lowercase letters as input" ["hello","WORLD"] 1
 
-                      let test6 = TestCase $ assertIOError "The algorithm should throw an error for the [] words, because such input produces the [] grid and the instructions specify that each grid must be non-empty" 
+                      let test6 = TestCase $ assertIOError "The algorithm should throw an error for the [] words, because such input produces the [] grid and the output grid density is undefined, so it is not strictly less then the input density" 
                             (createWordSearch [] 0.5)
 
                       let test7 = TestCase $ assertIOError "The algorithm should throw an error for a density of 0!" (createWordSearch ["SOMEWORD"] 0)
@@ -129,19 +129,25 @@ testChallengeII = do  putStrLn "-------- Testing Challenge II --------"
    
                       putStrLn "-------- End of test --------" 
                       where
+                      -- tests if the output grid's density is strictly less then the given input density
+                      -- checks is the words appear exacly once in the output grid
                       assertSolution:: String -> [String] -> Double -> Assertion
-                      assertSolution m words density = do result <- createAndSolve words density
-                                                          assertBool m (checkSolution result words)
+                      assertSolution m words density = do grid <- createWordSearch words density
+                                                          printGrid grid
+                                                          let result = solveWordSearch words grid
+                                                          assertBool m (checkSolution result words density $ length grid)
 
                       assertIOError ::  String -> IO WordSearchGrid -> Assertion
                       assertIOError m f = do wasErrorThrown <- isLeft <$> (E.try $ E.evaluate f :: IO (Either E.SomeException (IO WordSearchGrid)))
                                              assertBool m wasErrorThrown
 
-                      checkSolution :: [(String, Maybe Placement)] -> [String] -> Bool
-                      checkSolution test words = sameLength && allWordsArePresent
-                                                 where 
-                                                 sameLength = length test == length words
-                                                 allWordsArePresent = length [ w | w <- words, (w1,plc) <- test, w==w1, isJust plc] == length words
+                      -- returns True if the output grid's density is strictly less then the given input density AND the words appear exacly once in the output grid
+                      checkSolution :: [(String, Maybe Placement)] -> [String] -> Double -> Int ->  Bool
+                      checkSolution test words d gridSize = sameLength && allWordsArePresent && outputD < d
+                                                            where 
+                                                            sameLength = length test == length words
+                                                            allWordsArePresent = length [ w | w <- words, (w1,plc) <- test, w == w1, isJust plc] == length words
+                                                            outputD =  fromIntegral (length.concat $ words)  /  fromIntegral (gridSize * gridSize)
                       
 
 -- Tests the following cases:
@@ -325,7 +331,8 @@ testChallengeV = do  putStrLn "-------- Testing Challenge V --------"
 --    unclosed macro definitions
 --    negative lamvars
 --    invalid macro name  
---    tests on the innerRedn1 and outerRedn1 for negative lamvars, invalid macro names and unclosed macro definitions
+--    tests on the innerRedn1 and outerRedn1 for negative lamvars, invalid macro names, unclosed macro definitions and already reduced terms
+--    endless loop test
 testChallengeVI :: IO ()
 testChallengeVI = do  putStrLn "-------- Testing Challenge VI --------"
 
@@ -358,6 +365,17 @@ testChallengeVI = do  putStrLn "-------- Testing Challenge VI --------"
                       let test24 = TestCase $ assertEqual "The input macro names must be represented using a string of uppercase characters!" Nothing (outerRedn1 invalidMacroName)
                       let test25 = TestCase $ assertEqual "The input LamMacro definitions must be closed" Nothing (outerRedn1 lamExp16)
 
+                      let test26 = TestCase $ assertEqual "When the term is already reduced and is not possible to take a step of evaluation => we should return Nothing" Nothing (innerRedn1 (LamDef [] var1))
+                      let test27 = TestCase $ assertEqual "When the term is already reduced and is not possible to take a step of evaluation => we should return Nothing" Nothing (outerRedn1 (LamDef [] var1))
+
+                      let test28 = TestCase $ assertEqual "" lamEval16 (compareInnerOuter lamExp21 100)
+                      let test29 = TestCase $ assertEqual "" lamEval17 (compareInnerOuter lamExp22 100) 
+                      let test30 = TestCase $ assertEqual "" lamEval18 (compareInnerOuter lamExp23 100)
+                      let test31 = TestCase $ assertEqual "The algorithm needs to be able to handle endless loops of evaluation" lamEval19 (compareInnerOuter lamExp24 100)
+                      let test32 = TestCase $ assertEqual "" lamEval20 (compareInnerOuter lamExp25 100)
+                      let test33 = TestCase $ assertEqual "" lamEval21 (compareInnerOuter lamExp26 100)
+                      let test34 = TestCase $ assertEqual "The algorithm needs to be able to handle endless loops of evaluation" lamEval22 (compareInnerOuter lamExp27 1000)
+
                       runTestTT $ TestList [
                             TestLabel "test1" test1,
                             TestLabel "test2" test2,
@@ -385,7 +403,18 @@ testChallengeVI = do  putStrLn "-------- Testing Challenge VI --------"
 
                             TestLabel "negativeLamVar" test23,
                             TestLabel "invalidMacroName" test24,
-                            TestLabel "unclosedMacroDef" test25]
+                            TestLabel "unclosedMacroDef" test25,
+
+                            TestLabel "alreadyReducedTerm" test26,
+                            TestLabel "alreadyReducedTerm" test27,
+
+                            TestLabel "ex6-1 (example from spec)" test28,
+                            TestLabel "ex6-2 (example from spec)" test29,
+                            TestLabel "ex6-3 (example from spec)" test30,
+                            TestLabel "loopTest, ex6-4 (example from spec)" test31,
+                            TestLabel "ex6-5 (example from spec)" test32,
+                            TestLabel "ex6-6 (example from spec)" test33,
+                            TestLabel "ex6-7 (example from spec)" test34]
 
                       putStrLn "-------- End of test --------"
                       where 
@@ -394,17 +423,19 @@ testChallengeVI = do  putStrLn "-------- Testing Challenge VI --------"
                                            assertBool m wasErrorThrown
                        
 
+
 negativeLamVar,invalidMacroName :: LamMacroExpr
 negativeLamVar = LamDef [] (LamApp (LamAbs 1 (LamVar (-1))) exId)
-invalidMacroName = LamDef [("X-=.", LamVar 1)] (LamVar 1)
+invalidMacroName = LamDef [("X-=.", var1)] var1
 
 
-exId, var1 :: LamExpr
+exId, var1, wExp  :: LamExpr
 exId =  LamAbs 1 (LamVar 1)
 var1 = LamVar 1
+wExp = LamAbs 1 (LamApp var1 var1)
 
 
-lamExp1, lamExp2, lamExp3, lamExp4, lamExp5, lamExp6, lamExp7, lamExp8, lamExp9, lamExp10, lamExp11, lamExp12, lamExp13, lamExp14, lamExp15, lamExp16, lamExp17, lamExp18, lamExp19, lamExp20  :: LamMacroExpr
+lamExp1, lamExp2, lamExp3, lamExp4, lamExp5, lamExp6, lamExp7, lamExp8, lamExp9, lamExp10, lamExp11, lamExp12, lamExp13, lamExp14, lamExp15, lamExp16, lamExp17, lamExp18, lamExp19, lamExp20, lamExp21, lamExp22 , lamExp23, lamExp24, lamExp25, lamExp26, lamExp27  :: LamMacroExpr
 lamExp1 = LamDef [] (LamApp exId exId)
 lamExp2 = LamDef [] (LamAbs 1 (LamApp var1 exId))
 lamExp3 = LamDef [] (LamAbs 1 (LamApp (LamApp var1 (LamVar 3)) exId))
@@ -425,8 +456,15 @@ lamExp17 = LamDef [] (LamApp (LamVar 1) (LamVar 2))
 lamExp18 = LamDef [("F", exId)] (LamVar 2) 
 lamExp19 = LamDef [("F", exId)] (LamMacro "F") 
 lamExp20 = LamDef [("F", exId)] (LamApp (LamMacro "F") (LamMacro "F"))
+lamExp21 = LamDef [] (LamAbs 1 (LamApp (LamVar 1) (LamVar 2)))
+lamExp22 = LamDef [ ("F",exId) ] (LamMacro "F")
+lamExp23 = LamDef [] (LamApp exId (LamAbs 2 (LamVar 2)))
+lamExp24 = LamDef [] (LamApp wExp wExp)
+lamExp25 = LamDef [ ("ID",exId) , ("FST",LamAbs 1 (LamAbs 2 (LamVar 1))) ] ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp (LamMacro "ID") (LamVar 4)))
+lamExp26 = LamDef [ ("FST", LamAbs 1 (LamAbs 2 (LamVar 1)) ) ]  ( LamApp (LamApp (LamMacro "FST") (LamVar 3)) (LamApp (exId) (LamVar 4)))
+lamExp27 = LamDef [ ("ID",exId) , ("SND",LamAbs 1 (LamAbs 2 (LamVar 2))) ]  (LamApp (LamApp (LamMacro "SND") (LamApp wExp wExp) ) (LamMacro "ID") ) 
 
-lamEval1, lamEval2, lamEval3, lamEval4, lamEval5, lamEval6, lamEval7, lamEval8, lamEval9, lamEval10, lamEval11, lamEval12, lamEval13, lamEval14, lamEval15 :: (Maybe Int, Maybe Int, Maybe Int, Maybe Int)
+lamEval1, lamEval2, lamEval3, lamEval4, lamEval5, lamEval6, lamEval7, lamEval8, lamEval9, lamEval10, lamEval11, lamEval12, lamEval13, lamEval14, lamEval15, lamEval16, lamEval17, lamEval18, lamEval19, lamEval20, lamEval21, lamEval22 :: (Maybe Int, Maybe Int, Maybe Int, Maybe Int)
 lamEval1 = (Just 1, Just 1, Just 8, Just 8)
 lamEval2 = (Just 0, Just 0, Just 6, Just 6)
 lamEval3 = (Just 0, Just 0, Just 9, Just 9)
@@ -442,7 +480,13 @@ lamEval12 = (Just 0, Just 0, Just 23, Just 23)
 lamEval13 = (Just 1, Just 1, Just 7, Just 7)
 lamEval14 = (Just 2, Just 2, Just 9, Just 9)
 lamEval15 = (Nothing, Nothing, Nothing, Nothing)
-
+lamEval16 = (Just 0, Just 0, Just 6, Just 6)
+lamEval17 = (Just 1, Just 1,Just 3,Just 3)
+lamEval18 = (Just 1,Just 1,Just 8,Just 8)
+lamEval19 = (Nothing,Nothing,Nothing,Nothing)
+lamEval20 = (Just 4,Just 4,Just 22,Just 22)
+lamEval21 = (Just 4,Just 3,Just 21,Just 21)
+lamEval22 = (Nothing,Just 4,Nothing,Nothing)
 
 lamText1, lamText2, lamText3, lamText4, lamText5, lamText6, lamText7, lamText8, lamText9, lamText10, lamText11, lamText12, lamText13, lamText14, lamText15, lamText16  :: String
 lamText1 = "(\\x1 -> x1) \\x1 -> x1" 

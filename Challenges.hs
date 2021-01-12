@@ -69,7 +69,6 @@ type MacroTable = [(String, LamExpr)]
 -------------------------------- Challenge 1 --------------------------------s
 -- Recursively finds the locations of all the words in a given wordSearchPuzzle
 solveWordSearch :: [String] -> WordSearchGrid -> [ (String, Maybe Placement) ]
-solveWordSearch _ [] = error "Error: the input grid must be non-empty!"
 solveWordSearch [] _ = []
 solveWordSearch words grid | isGridUnsquare       = error "Error: the input grid needs to be square!"
                            | hasPalindromes words = error "Error: the input words cannot contain palinromes!"
@@ -190,7 +189,6 @@ go DownBack    =  go Down . go Back
 createWordSearch :: [String] -> Double -> IO WordSearchGrid
 createWordSearch [] _ = error "Error: the words input cannot be [] because such input produces the [] grid and the instructions specify that each grid must be non-empty!"
 createWordSearch words density | density <= 0 || 1 < density = error "Error: the grid density must be bigger than 0 and less than 1!"
-                               | null words = return []
                                | hasPalindromes words = error "Error: the input words cannot contain palinromes!"
                                | otherwise = toWordSearchGrid $ createWordSearch' initialSize
                                  where 
@@ -494,30 +492,16 @@ unexpandLamExpr (LamDef table expr) | null reductions = expr
                                       macros :: [String]
                                       macros = map fst table   
                                         
-                                      -- executes a single step of unexpansion 
-                                      -- (Replacing sub-expressions which are syntactically equivalent to an already existing macro)
+                                      -- executes a single step of unexpansion (Replacing sub-expressions which are syntactically equivalent to an already existing macro)
                                       -- Before replacing a LamMacro x with another LamMacro y, we will test if y is defined before x in the MacroTable
-                                      -- In the case of LamApp e1 e2, where we can unnexpand both e1 and e2, we will chose to unexpand the sub-expr
-                                      -- whose macro is defined first in the MacroTable
                                       unexpand:: LamExpr -> LamExpr
                                       unexpand e | isJust maybeMacro && (not.isLamMacro) e = macro
                                                  | otherwise = case e of
                                                                 LamVar _ -> e
                                                                 LamAbs n e -> LamAbs n $ unexpand e
+                                                                LamApp e1 e2 -> LamApp (unexpand e1) (unexpand e2 ) 
                                                                 LamMacro _ | isJust maybeMacro && macro `isToTheLeft` e -> macro
-                                                                           | otherwise -> e
-                                                                             
-                                                                LamApp e1 e2 | unexpandE1 -> LamApp red1 e2 
-                                                                             | otherwise -> LamApp e1 red2
-                                                                               where 
-                                                                               red1, red2, replacedE1Macro, replacedE2Macro :: LamExpr
-                                                                               red1 = unexpand e1
-                                                                               red2 = unexpand e2    
-                                                                               replacedE1Macro = head $ getAllLamMacros red1 \\ getAllLamMacros e1
-                                                                               replacedE2Macro = head $ getAllLamMacros red2 \\ getAllLamMacros e2
-
-                                                                               unexpandE1 :: Bool
-                                                                               unexpandE1 = red1 /= e1  && (red2 == e2 || replacedE1Macro `isToTheLeft` replacedE2Macro )                 
+                                                                           | otherwise -> e                                                                  
                                                     where
                                                     maybeMacro :: Maybe String
                                                     maybeMacro = lookup e swappedTable
@@ -530,11 +514,6 @@ unexpandLamExpr (LamDef table expr) | null reductions = expr
                                       (isToTheLeft) (LamMacro a) (LamMacro b) = fromJust $ liftA2 (<) (elemIndex a macros) (elemIndex b macros)   
                                                      
                                                                                               
-getAllLamMacros :: LamExpr -> [LamExpr]
-getAllLamMacros (LamVar _ ) = []
-getAllLamMacros (LamMacro g ) = [LamMacro g]
-getAllLamMacros (LamAbs _ e ) = getAllLamMacros e
-getAllLamMacros (LamApp e1 e2 ) = getAllLamMacros e1 ++ getAllLamMacros e2
 
 -- Challenge 4 --
 {-
@@ -725,26 +704,21 @@ compareInnerOuter me steps | steps < 0 = error "Error: the number of steps canno
                              cps = LamDef t1 $ LamApp c1 (LamAbs 1 (LamVar 1))
                              LamDef t1 c1 = cpsTransform me
                                              
-                             isNotFullyReduced :: Maybe LamMacroExpr -> Bool
-                             isNotFullyReduced Nothing = True
-                             isNotFullyReduced (Just (LamDef t1 e1)) = t1 /= [] || hasRedex e1
-
                              getSteps :: (LamMacroExpr -> Maybe LamMacroExpr) -> LamMacroExpr -> Maybe Int
-                             getSteps sse e | steps' > steps || isNotFullyReduced lastEval = Nothing 
+                             getSteps sse e | steps' > steps || isNothing lastEval || (not.isFullyReduced.fromJust) lastEval = Nothing 
                                             | otherwise = Just steps'
                                               where 
                                               steps' :: Int
-                                              steps' = length evalTrace
+                                              steps' = length evalTrace - 1
 
                                               evalTrace :: [Maybe LamMacroExpr]
-                                              evalTrace = take steps $ trace sse e
+                                              evalTrace = take (steps + 1) $ trace sse e
                                                 
                                               lastEval :: Maybe LamMacroExpr
                                               lastEval = if null evalTrace then Just me else last evalTrace
 
-
 trace :: (LamMacroExpr -> Maybe LamMacroExpr) -> LamMacroExpr -> [Maybe LamMacroExpr]
-trace ssev m = map snd $ takeWhile (uncurry (/=)) $ reductions ssev m
+trace ssev m = map fst $ takeWhile (uncurry (/=)) $ reductions ssev m
 
                          
 reductions :: (LamMacroExpr -> Maybe LamMacroExpr) -> LamMacroExpr -> [(Maybe LamMacroExpr, Maybe LamMacroExpr)]
@@ -758,23 +732,24 @@ reductions ssev m = zip evals (tail evals)
                     maybe1Step (Just e) = ssev e
                      
 
+isFullyReduced :: LamMacroExpr -> Bool
+isFullyReduced (LamDef t1 e1) = null t1 && (not.hasRedex) e1
+
+
 -- Performs a single step of innermost evaluation
 -- For each redex:
 -- Evaluates the argument before applying it to a function (LamAbs)
--- If the function (LamAbs) contains redexes => go inside it first  
+-- If the function (LamAbs) contains redexes => evaluate it first  
 -- The local function "inner" returns a (expr, Maybe string) tuple representing (expr, the name of a LamMacro that we have expanded if any)
 -- Each time we expand a macro, we expand it everywhere using the macroExpansion method      
 innerRedn1 :: LamMacroExpr -> Maybe LamMacroExpr
-innerRedn1 me@(LamDef t expr) | hasInvalidMacroName me || hasNegativeVars me || hasUnclosedMacroDef me = Nothing
-                              | (not.hasRedexOrMac) expr = Just macroExpand1
+innerRedn1 me@(LamDef t expr) | hasInvalidMacroName me || hasNegativeVars me || hasUnclosedMacroDef me || isFullyReduced me = Nothing
+                              | (not.hasRedexOrMac) expr = Just $ macroExpansion me (fst.head $ t)
                               | isJust expandedM = Just $ macroExpansion me (fromJust expandedM)
                               | otherwise = Just $ LamDef t evaluatedE
                                 where
                                 (evaluatedE, expandedM) = inner expr :: (LamExpr, Maybe String) 
 
-                                macroExpand1 :: LamMacroExpr
-                                macroExpand1 = if null t then me else macroExpansion me (fst.head $ t)
-                                
                                 inner :: LamExpr -> (LamExpr, Maybe String)   
                                 inner (LamMacro g) = (fromJust $ lookup g t, Just g)                                                              
                                 inner (LamApp e@(LamAbs x e1) e2) | hasRedex e1 = (LamApp (LamAbs x e1') e2, m') 
@@ -793,15 +768,12 @@ innerRedn1 me@(LamDef t expr) | hasInvalidMacroName me || hasNegativeVars me || 
 -- The local function "outer" returns a (expr, maybe string) tuple representing (expr, the name of a LamMacro that we have expanded)
 -- Each time we expand a macro, we expand it everywhere using the macroExpansion method   
 outerRedn1 :: LamMacroExpr -> Maybe LamMacroExpr
-outerRedn1 me@(LamDef t expr) | hasInvalidMacroName me || hasNegativeVars me || hasUnclosedMacroDef me = Nothing
-                              | (not.hasRedexOrMac) expr = macroExpand1
+outerRedn1 me@(LamDef t expr) | hasInvalidMacroName me || hasNegativeVars me || hasUnclosedMacroDef me || isFullyReduced me = Nothing
+                              | (not.hasRedexOrMac) expr = Just $ macroExpansion me (fst.head $ t)
                               | isJust expandedM = Just $ macroExpansion me (fromJust expandedM)
                               | otherwise = Just $ LamDef t evaluatedE
                                 where 
                                 (evaluatedE, expandedM) = outer expr :: (LamExpr, Maybe String)
-
-                                macroExpand1 :: Maybe LamMacroExpr
-                                macroExpand1 = if null t then Just me else Just $ macroExpansion me (fst.head $ t)
                                           
                                 outer :: LamExpr -> (LamExpr, Maybe String)  
                                 outer (LamMacro g) = (fromJust $ lookup g t, Just g)            
