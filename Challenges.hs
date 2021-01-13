@@ -400,8 +400,8 @@ prettyPrint me@(LamDef table e) | hasInvalidMacroName me = error "Error: the inp
                                   unexpanedTable = foldl (\acc (m,e)  -> acc ++ [ (m, unexpandLamExpr $ LamDef acc e) ]) [] table
 
                                   pritntedMacros, printedExpr:: String
-                                  pritntedMacros = concatMap (\(m,e) -> concat ["def ", m, " = ", printLamExpr e, " in "]) unexpanedTable
-                                  printedExpr = printLamExpr.unexpandLamExpr $ LamDef unexpanedTable e
+                                  pritntedMacros = concatMap (\(m,e) -> concat ["def ", m, " = ", printLamExpr e [], " in "]) unexpanedTable
+                                  printedExpr = printLamExpr (unexpandLamExpr $ LamDef unexpanedTable e) []
 
 -- Tests if all LamMacro names are defined using only [A-Z] symbols
 hasInvalidMacroName :: LamMacroExpr -> Bool
@@ -439,25 +439,28 @@ anyLeaf f (LamDef table expr) = any (\(_,e) -> anyLeaf' f e) table || anyLeaf' f
 
 
 -- Prints a LamExpr.
+-- Takes a lambda expression and a list of expressions. As we go deeper into the Abstract Syntaxt Tree we will add the visited nodes into the list.
 -- Omits unnecessary bracketing by following these 3 rules:
 -- If we have a LamApp e1 e2, we will:
 --              - place brackets around e1 if e1 == LamAbs
 --              - place brackets around e2 if e2 == LamApp
---              - if e1 == LamApp _ e1'@(LamAbs), we will place brackets around e1'
-printLamExpr:: LamExpr -> String
-printLamExpr (LamMacro g) = g
-printLamExpr (LamVar n) = "x" ++ show n
-printLamExpr (LamAbs n e) = concat ["\\", printLamExpr (LamVar n), " -> ", printLamExpr e]
-printLamExpr (LamApp e1 e2) =  case e1 of
-                                    LamApp e1' e1'' -> unparse e1' (isAbs e1') ++ " " ++ unparse e1'' (isApp e1'' || isAbs e1'') ++ " " ++ secondTerm 
-                                    _ ->  unparse e1 (isAbs e1) ++ " " ++ secondTerm
-                               where
-                               secondTerm :: String
-                               secondTerm = unparse e2 (isApp e2)
+--              - place brackets around e2 if e2 == LamAbs AND e2's grandparent == LamApp
+printLamExpr:: LamExpr -> [LamExpr] -> String
+printLamExpr (LamMacro g) _ = g
+printLamExpr (LamVar n) _ = "x" ++ show n
+printLamExpr (LamAbs n e) prev = concat ["\\x", show n  ," -> ", printLamExpr e ((LamAbs n e):prev)]
+printLamExpr (LamApp e1 e2) prev = unparse e1 (isAbs e1) ++ " " ++ unparse e2 (isApp e2 || isGrandParentApp)
+                                   where
+                                   isGrandParentApp :: Bool
+                                   isGrandParentApp = isAbs e2 && (not.null) prev && (isApp.head) prev
 
-                               unparse :: LamExpr -> Bool -> String
-                               unparse exp bracketsCond | bracketsCond = "(" ++ printLamExpr exp ++ ")"
-                                                        | otherwise    = printLamExpr exp
+                                   newPrev :: [LamExpr]         
+                                   newPrev = (LamApp e1 e2):prev
+
+                                   unparse :: LamExpr -> Bool -> String
+                                   unparse exp bracketsCond | bracketsCond = "(" ++ printLamExpr exp newPrev ++ ")"
+                                                            | otherwise    = printLamExpr exp newPrev
+
 
 
 isAbs :: LamExpr -> Bool
@@ -630,7 +633,7 @@ isTermClosed expr = isTermClosed' expr
                     isTermClosed' (LamAbs y e) = (not $ isFree y expr) && isTermClosed' e
                     isTermClosed' (LamApp e1 e2) = isTermClosed' e1 && isTermClosed' e2
                     isTermClosed' (LamMacro _) = True
-
+ 
 
 
 -- Challenge 5
@@ -834,3 +837,6 @@ subst (LamAbs x e1) y e | x /= y && not(isFree x e) = LamAbs x (subst e1 y e)
 
 rename :: Int -> LamExpr -> Int
 rename x e = if isFree (x + 1) e then rename (x + 1) e else x + 1
+
+
+
